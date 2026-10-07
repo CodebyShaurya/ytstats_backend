@@ -4,7 +4,9 @@ import os
 import re
 import sys
 from flask import Flask, jsonify, request
+from dotenv import load_dotenv
 
+load_dotenv()
 SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
 app = Flask(__name__)
 
@@ -86,6 +88,9 @@ def get_video_info(video_id):
 # COMMENTS
 # --------------------------------------------------
 
+MAX_COMMENTS = 100
+
+
 def get_comments(video_id):
 
     comments = []
@@ -101,25 +106,59 @@ def get_comments(video_id):
 
         page_comments = data.get("comments", [])
 
-        for comment in page_comments:
+        remaining_comments = MAX_COMMENTS - len(comments)
+
+        for comment in page_comments[:remaining_comments]:
+            channel = comment.get("channel")
+            author_channel = comment.get("author_channel")
+            snippet = comment.get("snippet")
+            snippet = snippet if isinstance(snippet, dict) else {}
 
             comments.append({
                 "comment_id": comment.get("comment_id"),
 
                 "author": (
-                    comment.get("channel", {}).get("name")
-                    if isinstance(comment.get("channel"), dict)
-                    else None
+                    channel.get("name")
+                    if isinstance(channel, dict)
+                    else comment.get("author") or (
+                        author_channel.get("name")
+                        if isinstance(author_channel, dict)
+                        else snippet.get("authorDisplayName")
+                    )
                 ),
 
-                "text": comment.get("snippet"),
+                "text": (
+                    comment.get("comment_text")
+                    or (comment.get("snippet") if isinstance(comment.get("snippet"), str) else None)
+                    or comment.get("content")
+                    or snippet.get("textDisplay")
+                    or snippet.get("textOriginal")
+                    or snippet.get("text")
+                ),
 
-                "likes": comment.get("likes"),
+                "likes": (
+                    comment.get("likes")
+                    or comment.get("extracted_vote_count")
+                    or comment.get("vote_count")
+                    or snippet.get("likeCount")
+                ),
 
-                "published": comment.get("published"),
+                "published": (
+                    comment.get("published")
+                    or comment.get("published_time")
+                    or comment.get("published_date")
+                    or snippet.get("publishedAt")
+                ),
 
-                "replies_count": comment.get("replies_count")
+                "replies_count": (
+                    comment.get("replies_count")
+                    or comment.get("reply_count")
+                    or snippet.get("replyCount")
+                )
             })
+
+        if len(comments) >= MAX_COMMENTS:
+            break
 
         next_token = data.get("comments_next_page_token")
 
