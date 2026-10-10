@@ -1,8 +1,24 @@
 # ytstats_backend
 
-The `/api/youtube` endpoint fetches up to 500 comments for a video and sends
-the video metadata and comments to Gemini. The response includes an `analysis`
-object containing:
+The `/api/youtube` endpoint accepts a YouTube URL and sends a user-selected
+comment sample, video metadata, and the transcript to Gemini. It returns only
+the `analysis` object and the number of comments analyzed; raw comments are
+not returned.
+
+Use either an explicit `comment_count` (between 1 and 500) or an accuracy
+preset:
+
+- `low`: 50 comments;
+- `medium`: 200 comments;
+- `high`: 500 comments.
+
+Example:
+
+```text
+GET /api/youtube?yturl=https://www.youtube.com/watch?v=VIDEO_ID&accuracy=high
+```
+
+The response includes:
 
 - the general viewer consensus and sentiment;
 - title and description match scores from 0 to 10;

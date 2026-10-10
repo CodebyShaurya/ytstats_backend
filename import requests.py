@@ -97,7 +97,14 @@ def get_video_info(video_id):
 MAX_COMMENTS = 500
 
 
-def get_comments(video_id):
+def get_comments(video_id, max_comments=MAX_COMMENTS):
+    """Fetch up to max_comments comments, following SerpApi pagination."""
+    if not isinstance(max_comments, int) or isinstance(max_comments, bool):
+        raise ValueError("comment_count must be an integer.")
+    if not 1 <= max_comments <= MAX_COMMENTS:
+        raise ValueError(
+            f"comment_count must be between 1 and {MAX_COMMENTS}."
+        )
 
     comments = []
 
@@ -112,7 +119,7 @@ def get_comments(video_id):
 
         page_comments = data.get("comments", [])
 
-        remaining_comments = MAX_COMMENTS - len(comments)
+        remaining_comments = max_comments - len(comments)
 
         for comment in page_comments[:remaining_comments]:
             channel = comment.get("channel")
@@ -163,7 +170,7 @@ def get_comments(video_id):
                 )
             })
 
-        if len(comments) >= MAX_COMMENTS:
+        if len(comments) >= max_comments:
             break
 
         next_token = data.get("comments_next_page_token")
@@ -466,7 +473,7 @@ def get_transcript(video_id):
 # MAIN
 # --------------------------------------------------
 
-def scrape_youtube_video(video_url):
+def scrape_youtube_video(video_url, comment_count=MAX_COMMENTS):
 
     print("\nExtracting video ID...")
 
@@ -487,7 +494,7 @@ def scrape_youtube_video(video_url):
     # Comments
     print("Getting comments...")
 
-    comments = get_comments(video_id)
+    comments = get_comments(video_id, comment_count)
 
     print("Sending comments to Gemini for analysis...")
 
@@ -531,25 +538,47 @@ def save_results(data):
 
 @app.route("/api/youtube", methods=["GET", "POST"])
 def youtube_api():
-    """Return video information, transcript, comments, and Gemini analysis."""
+    """Analyze a YouTube video using a user-selected comment sample."""
     if request.method == "POST":
         payload = request.get_json(silent=True) or {}
-        video_url = payload.get("video_url") or payload.get("url")
+        video_url = (
+            payload.get("yturl")
+            or payload.get("video_url")
+            or payload.get("url")
+        )
+        requested_count = payload.get("comment_count")
+        accuracy = payload.get("accuracy")
     else:
-        video_url = request.args.get("video_url") or request.args.get("url")
+        video_url = (
+            request.args.get("yturl")
+            or request.args.get("video_url")
+            or request.args.get("url")
+        )
+        requested_count = request.args.get("comment_count")
+        accuracy = request.args.get("accuracy")
 
     if not video_url:
         return jsonify({
-            "error": "video_url is required",
+            "error": "yturl is required",
             "example": {
-                "GET": "/api/youtube?video_url=https://www.youtube.com/watch?v=VIDEO_ID",
-                "POST": {"video_url": "https://www.youtube.com/watch?v=VIDEO_ID"}
+                "GET": (
+                    "/api/youtube?yturl=https://www.youtube.com/watch?v=VIDEO_ID"
+                    "&accuracy=high"
+                ),
+                "POST": {
+                    "yturl": "https://www.youtube.com/watch?v=VIDEO_ID",
+                    "comment_count": 250
+                }
             }
         }), 400
 
     try:
-        data = scrape_youtube_video(video_url)
-        return jsonify(data)
+        comment_count = _resolve_comment_count(requested_count, accuracy)
+        data = scrape_youtube_video(video_url, comment_count)
+        return jsonify({
+            "analysis": data["analysis"],
+            "comments_analyzed": len(data["comments"])
+        })
     except ValueError as error:
         return jsonify({"error": str(error)}), 400
     except SerpApiError as error:
@@ -558,6 +587,36 @@ def youtube_api():
         return jsonify({"error": str(error)}), 502
     except requests.RequestException as error:
         return jsonify({"error": f"SerpApi request failed: {error}"}), 502
+
+
+def _resolve_comment_count(requested_count, accuracy):
+    """Resolve explicit count or accuracy preset into a bounded sample size."""
+    accuracy_counts = {
+        "low": 50,
+        "medium": 200,
+        "high": 500
+    }
+
+    if requested_count not in (None, ""):
+        try:
+            count = int(requested_count)
+        except (TypeError, ValueError) as error:
+            raise ValueError("comment_count must be an integer.") from error
+        if not 1 <= count <= MAX_COMMENTS:
+            raise ValueError(
+                f"comment_count must be between 1 and {MAX_COMMENTS}."
+            )
+        return count
+
+    if accuracy in (None, ""):
+        return MAX_COMMENTS
+
+    normalized_accuracy = str(accuracy).strip().lower()
+    if normalized_accuracy not in accuracy_counts:
+        raise ValueError(
+            "accuracy must be one of: low, medium, high."
+        )
+    return accuracy_counts[normalized_accuracy]
 
 
 def print_results(data):
