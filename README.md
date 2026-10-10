@@ -23,7 +23,10 @@ The response includes:
 - the general viewer consensus and sentiment;
 - title and description match scores from 0 to 10;
 - an engagement assessment using likes and comment counts; and
-- an overall rating from 0 to 10 with an explanation and limitations.
+- an overall rating from 0 to 10 with an explanation and limitations;
+- up to three related videos, each with a YouTube link; and
+- a `lacking_topic_videos` list containing one video link for each topic
+  Gemini identifies as inadequately covered.
 
 Set both `SERPAPI_API_KEY` and `GEMINI_API_KEY` in `.env`. `GEMINI_MODEL` is
 optional and defaults to `gemini-2.5-flash`. Preview, experimental, or
