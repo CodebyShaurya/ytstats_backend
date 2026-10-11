@@ -688,6 +688,11 @@ def save_results(data):
 # FLASK API
 # --------------------------------------------------
 
+@app.get("/")
+def health_check():
+    return jsonify({"message": "YT Stats API is running"})
+
+
 @app.route("/api/youtube", methods=["GET", "POST"])
 def youtube_api():
     """Analyze a YouTube video using a user-selected comment sample."""
