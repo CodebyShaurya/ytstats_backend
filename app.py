@@ -579,7 +579,16 @@ def get_transcript(video_id):
         "v": video_id
     }
 
-    data = serpapi_request(params)
+    try:
+        data = serpapi_request(params)
+    except SerpApiError as error:
+        if "hasn't returned any results" not in str(error).lower():
+            raise
+        app.logger.warning(
+            "No transcript was found for video %s; continuing without it.",
+            video_id
+        )
+        return []
 
     transcript = []
 
