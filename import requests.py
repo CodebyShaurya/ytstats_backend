@@ -822,6 +822,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) > 1 and sys.argv[1] == "api":
         app.run(host="0.0.0.0", port=5000, debug=False)
+        sys.exit(0)
     elif len(sys.argv) > 1:
 
         video_url = sys.argv[1]
